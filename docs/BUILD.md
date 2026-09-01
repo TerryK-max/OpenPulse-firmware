@@ -132,31 +132,34 @@ bench test is meaningful, and record the result in the relevant doc.
 
 ## 5. Logs
 
-### Now (bring-up firmware — CDC-ACM virtual serial port)
+### CDC-ACM log console
 
-The box enumerates as a USB serial port. 115200 8N1 (baud is ignored by CDC but
-terminals want a number).
+The box is a **composite device**: interfaces 0–1 are CDC-ACM and appear as a
+USB serial port (logs); interface 2 is the vendor bulk protocol pipe (below).
+115200 8N1 (baud is ignored by CDC but terminals want a number).
 
 | OS | Command |
 |---|---|
-| macOS | `screen /dev/tty.usbmodem* 115200`  (exit: `Ctrl-A` `K`) |
+| macOS | `screen /dev/cu.usbmodem* 115200`  — **`cu.` not `tty.`** (`tty.*` blocks on DCD). Exit: `Ctrl-A` `K` |
 | Linux | `screen /dev/ttyACM0 115200`  or `picocom -b 115200 /dev/ttyACM0` |
 | Windows | open the `COMx` (CDC ACM) port in PuTTY / TeraTerm |
 
-The bring-up prints a boot banner, the DRV2605 probe, the resonance sweep, and
-the `demo_simracing` telemetry. See `src/Main.c` `USB_Log_*`.
+The renderer prints a boot banner (re-printed for 20 s) and `[R]` status lines;
+`[TX …]` lines decode outbound protocol frames (`TRANSPORT_USB_TX_TRACE`).
 
-### After Phase 3
+### Protocol pipe + PC sender
 
-- **CDC-ACM stays** (composite device) — same `screen` command, for quick dev
-  checks and the boot report.
-- **Primary log channel** becomes `TYPE_LOG` frames on the vendor bulk IN
-  endpoint, printed/recorded by `tools/pc_sender`.
-- **`stats` via `STATUS_REQ`** is the real telemetry-about-the-box channel during
-  streaming (dashboard in `tools/pc_sender`), not text.
-- **UART TX on PA7** (`115200 8N1`, needs a USB-serial adapter on that pin) is
-  the fallback for debugging the USB stack itself, ISR problems, and hardfaults —
-  the one channel that works when USB doesn't.
+`tools/pc_sender/openpulse_send.py` (pyusb) claims interface 2 and streams a
+waveform; `STATUS_REQ` at 10 Hz drives its dashboard. See
+[../tools/pc_sender/README.md](../tools/pc_sender/README.md). The CDC console
+keeps working alongside it.
+
+### Not yet (Phase 3.3 / 3.6)
+
+- A `TYPE_LOG`-frame `log` sink and a **PA7 UART** sink (`log_set_sink()`) — the
+  channels that work when USB is the thing being debugged.
+- MS OS 2.0 descriptors for Windows WinUSB auto-bind — until then Windows needs
+  a one-off Zadig bind on interface 2.
 
 ### After Phase 4 (RF)
 

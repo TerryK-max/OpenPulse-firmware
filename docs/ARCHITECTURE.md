@@ -1,10 +1,11 @@
 # Architecture
 
 Read [README.md](README.md) first. This document describes the **target**
-architecture. As of 2026-09-01 (Phases 0–2 done) layers 0–4 exist:
-`board/`, `i2c/`, `drv2605/`, `haptic/`, `link/`, `util/`, `log/` and `main.c`.
-Layers 5–6 (`transport/`, `usb/`, `rf/`) are still to come — see
-[ROADMAP.md](ROADMAP.md) Phases 3–4.
+architecture. As of 2026-09-02 (Phases 0–3 done bar the bench check) layers 0–5
+exist: `board/`, `i2c/`, `drv2605/`, `haptic/`, `link/`, `util/`, `log/`,
+`usb/` (composite CDC + vendor bulk), `transport/` (`transport_usb`) and
+`main.c`. Still to come: `rf/` + `transport_rf` (Phase 4), the `log_set_sink()`
+split (Phase 3.3), MS OS 2.0 descriptors (Phase 3.6).
 
 ---
 
@@ -63,12 +64,12 @@ call". No upward calls. No sibling calls except through a defined interface.
 | 4 | `link/proto.h` | **The frozen wire contract.** Frame layout, `TYPE_*` codes, config/stats structs, `PROTO_VERSION`. **Kept byte-identical with the PC copy under `tools/proto/`.** See [PROTOCOL.md](PROTOCOL.md). | — |
 | 4 | `link/link` | Framing (CRC8 verify, length check), per-direction sequence tracking + gap accounting, dispatch: DATA→`haptic_fifo` push, ENVELOPE→engine, CTRL_*→`link_control`, RESYNC→`haptic_abort`. Builds outbound frames (PONG/STATUS/LOG/FAULT) via an injected `link_send_fn`. Pure logic, no transport knowledge, no `board/time` (uses `haptic_now_ms()`). | haptic_engine, haptic_fifo, util/crc |
 | 4 | `link/link_control` | Handlers for `CTRL_SET_CONFIG` (validate every field → `haptic_apply_config` or `FAULT_BAD_CONFIG`/`FAULT_VERSION`), `CTRL_SET_MODE`, `CTRL_PING`, `STATUS_REQ`. Config-driven DRV2605 reprogramming happens inside the engine's staged-config apply, so `link_control` needs only `haptic_engine`. | haptic_engine, link (tx builders) |
-| 5 | `transport/transport.h` | Common vtable: `init()`, `poll()`, `send(buf,len)`, `stats`. | — |
-| 5 | `transport/transport_usb` | Binds the USB data endpoint(s) to `link_rx()` / `link` outbound. | usb, link |
+| 5 | `transport/transport.h` | `transport_t` vtable: `init()` (wire link↔pipe), `poll()` (main-loop pump), `host_active()`. | — |
+| 5 | `transport/transport_usb` | Binds `usb_vendor` (EP2) to `link`: `link_init(usb_send_adapter)` + `usb_vendor_set_rx(link_rx)`; `poll()` = `usb_vendor_poll()`. `TRANSPORT_USB_TX_TRACE` decodes outbound frames to the CDC log. | usb, link |
 | 5 | `transport/transport_rf` | *(Phase 4)* Binds the 2.4 GHz RX/TX to `link_rx()` / `link` outbound. | rf, link |
-| 5 | `usb/usb_device` | USB descriptors for the **composite device**: CDC-ACM interface (logs + control fallback) + vendor interface with a bulk OUT (data) and bulk IN (PONG/STATUS/LOG). MS OS 2.0 descriptors so the vendor interface auto-binds to WinUSB. | StdPeriphDriver usbdev |
-| 5 | `usb/usb_cdc` | CDC endpoint plumbing (evolves from `usb_log.c`). |
-| 5 | `usb/usb_data_ep` | Vendor bulk endpoint plumbing → `transport_usb`. |
+| 5 | `usb/usb_device` | The composite device: descriptors (IAD: CDC iface 0–1 + vendor iface 2), enumeration SM, `USB_IRQHandler`, all EP dispatch. Evolved from the bench-proven CDC logger. MS OS 2.0 descriptors → Phase 3.6. | StdPeriphDriver usbdev |
+| 5 | `usb/usb_cdc.h` | CDC-ACM channel API — `usb_cdc_write/printf/connected` (EP1 IN log ring). Implemented in `usb_device.c`. | — |
+| 5 | `usb/usb_vendor.h` | Vendor bulk API — `usb_vendor_set_rx` / `_poll` / `_send` / `_host_active` / `_stats` (EP2). ISR stages packets, main loop parses. Implemented in `usb_device.c`. | link/proto.h (frame size cap only) |
 | 5 | `rf/rf_link` | *(Phase 4)* WCH 2.4 GHz proprietary mode wrapper. Reference: `EVT/EXAM/RF/RF_Basic` and `EVT/EXAM/RF/RF_UartDongle`. | StdPeriphDriver RF |
 | 6 | `log/log` | `log_printf(level, fmt, …)` → internal ring buffer, drained by the main loop into the **current sink** (`log_set_sink()`): CDC write, `LOG` frame via `link`, UART TX, or RF back-channel. Levels `ERR/WARN/INFO/DBG`. **Never called from an ISR.** | (sink is injected) |
 | 6 | `util/ringbuf.h`, `util/crc` | Generic byte ring; CRC8 (poly 0x07) used by `link` and RF. | — |

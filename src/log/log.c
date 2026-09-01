@@ -1,11 +1,12 @@
 #include "log/log.h"
+#include "usb/usb_device.h"
 
 void log_init(void)
 {
-    USB_Log_Init();
+    usb_device_init();
 }
 
 uint8_t log_is_connected(void)
 {
-    return USB_Log_IsConnected();
+    return usb_device_configured();
 }

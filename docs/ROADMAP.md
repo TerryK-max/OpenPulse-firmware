@@ -136,46 +136,70 @@ failures** (`make test`). `link/` proven free of `transport/` / `usb/` includes.
   **Acceptance — MET**: harness green; `make test` runs the isolation grep and
   the `proto.h` `diff`.
 
-**On-device integration (bonus):** `HAPTIC_TEST_VIA_LINK=1` (default) routes the
-renderer's generator through the real link layer — it frames `DATA_SAMPLES` and
-calls `link_rx()`, does a boot `PING`/`SET_CONFIG`/`SET_MODE` handshake and a
-periodic `STATUS_REQ`; replies are decoded to `[TX …]` log lines by a stand-in
-sink (`box_tx`). This is the exact path Phase 3's USB bulk OUT will take.
-🔬 **still open**: flash and confirm `[R]` still shows `crc=0 gap=0 rsync=0
-bad=0`, `rx` advancing, and the `[TX PONG]` / `[TX STATUS]` lines look right.
+**On-device integration:** `HAPTIC_TEST_VIA_LINK=1` (default) routes the
+renderer's generator through the real link layer — frames `DATA_SAMPLES`, calls
+`link_rx()`, boot `PING`/`SET_CONFIG`/`SET_MODE` handshake, periodic
+`STATUS_REQ`. Phase 3 kept this as the **no-PC self-test** (suspended the moment
+`transport_usb.host_active()`). 🔬 open with the Phase 3 bench (below).
 
 ---
 
-## Phase 3 — USB transport (composite device) + logging move
+## Phase 3 — USB transport (composite device)  —  3.1/3.2/3.4 DONE (2026-09-02)
 
-Goal: real data over USB; logs on their own channel; CDC kept for convenience.
+Goal: real data over USB; CDC kept for logs. Builds 0 warnings (FLASH 16.3 KB,
+RAM 6.3 KB / 12). `make test` still 83/0.
 
-- `[ ]` **3.1 `src/usb/usb_device`.** Extend the current single-interface CDC
-  into a **composite**: (a) CDC-ACM interface (bulk IN/OUT + notify) for logs +
-  a text control fallback; (b) a vendor interface with **bulk OUT** (PC→box
-  data) and **bulk IN** (box→PC frames). Add **MS OS 2.0 descriptors** so the
-  vendor interface auto-binds to WinUSB with no `.inf`. Reference:
-  `EVT/EXAM/USB/Device/CompoundDev`, `EVT/EXAM/USB/Device/VendorDefinedDev`.
-- `[ ]` **3.2 `src/transport/transport.h`** + `transport_usb`. Vendor bulk OUT
-  completion → `link_rx()`. `link` outbound → vendor bulk IN. Respect the "ISR
-  does O(1) work" rule (§3 ARCHITECTURE): either push samples straight to the
-  FIFO in the completion callback or stage + flag.
-- `[ ]` **3.3 Logging split.** Add a `link`-frame sink to `log/`
-  (`TYPE_LOG`). Default sink stays CDC for dev; a `config.flags` bit or a build
-  flag selects the `LOG`-frame sink. Bring out **UART TX on PA7** (`UART_Remap`
-  to `UART_TX_REMAP_PA7`, `UART_DefInit`) as a third `log` sink for
-  USB-stack / ISR / hardfault debugging — populate a header/testpoint.
-- `[ ]` **3.4 `tools/pc_sender/`.** Reference host app (Python + `pyusb`, or C +
-  `libusb`): PING, SET_CONFIG, SET_MODE(SAMPLES), then stream a test waveform
-  (a WAV file's envelope, or synthetic engine + kerb) at `sample_rate`; poll
-  `STATUS_REQ` at ~10 Hz and print the dashboard; print `TYPE_LOG` lines.
-- `[ ]` **3.5 Benchmark 🔬.** Sustained frames/s, end-to-end latency (toggle a
-  spare GPIO on frame-rx, scope vs actuator), packet loss under load. Record in
-  `docs/BENCH.md`. Confirm 1 kHz and 2 kHz both run with 0 overrun and small
-  jitter.
-  **Acceptance 🔬**: PC app streams a recognisable effect to the actuator;
-  failsafe trips ~`failsafe_ms` after the PC app is killed; `screen` on the CDC
-  port still shows logs.
+- `[x]` **3.1 `src/usb/usb_device`.** The bench-proven single-interface CDC
+  device (old `src/usb_log.c`) became a **composite** — enumeration SM + EP0
+  descriptor engine kept as-is, descriptors rebuilt, EP2 added:
+  - Device `0xEF/0x02/0x01` (IAD), bcdUSB 2.00, `USB_VID:USB_PID` 1A86:5730.
+  - Config (98 B, 3 interfaces): IAD → iface 0 CDC control (EP4 IN int 8) →
+    iface 1 CDC data (EP1 OUT/IN bulk 64) → iface 2 vendor `0xFF` (EP2 OUT/IN
+    bulk 64). Descriptor bytes validated structurally.
+  - `usb_cdc.h`: `usb_cdc_write/printf/connected` (EP1 IN log ring, 1 KB).
+  - `usb_vendor.h`: `usb_vendor_set_rx` / `_poll` / `_send` / `_host_active` /
+    `_stats`. RX: the ISR stages each EP2-OUT packet in a ring (O(1), no parse);
+    `usb_vendor_poll()` feeds them to the callback from the **main loop**. TX:
+    `usb_vendor_send()` queues, the ISR drains onto EP2 IN. EP2 mirrors the
+    proven EP1 CTRL discipline (`AUTO_TOG`, R_TOG flip on OUT, NAK on IN done).
+  - `src/usb_log.{c,h}` deleted; `log/` facade now forwards to `usb_cdc`.
+  - **MS OS 2.0 / WinUSB auto-bind deferred to 3.6** — no WCH reference for it,
+    untestable here, and Windows-only (dev is on macOS, where libusb claims a
+    class-`0xFF` interface with no OS descriptors).
+- `[x]` **3.2 `src/transport/{transport.h, transport_usb}`.** `transport_usb`
+  (a `transport_t` vtable) binds `usb_vendor` ↔ `link`: `init()` =
+  `link_init(usb_send_adapter)` + `usb_vendor_set_rx(link_rx)`; `poll()` =
+  `usb_vendor_poll()`; `host_active()`. `link_rx` runs from the main loop (not
+  the ISR), so its `link_tx_*` replies queue cleanly. `TRANSPORT_USB_TX_TRACE`
+  (config.h, default 1) decodes each outbound frame to the CDC log.
+- `[~]` **3.3 Logging split.** DEFERRED — CDC stays the only `log` sink for now.
+  `log.h` already has the level enum; `log_set_sink()` (+ `TYPE_LOG` frame sink
+  + PA7 UART sink) is a clean follow-up.
+- `[x]` **3.4 `tools/pc_sender/`.** `proto.py` (hand-maintained mirror of
+  `proto.h`: framing, CRC-8, struct pack — self-tested) + `openpulse_send.py`
+  (pyusb): handshake → stream `DATA_SAMPLES` (`--wave sim|sine`, paced to real
+  time) → poll `STATUS_REQ` at 10 Hz → dashboard; background reader thread for
+  PONG/STATUS/LOG/FAULT. `--list`, Ctrl-C → `SET_MODE(IDLE)`.
+- `[~]` **3.5 Bench 🔬.** **Enumeration + end-to-end path confirmed on bench
+  (2026-09-02):** composite device comes up, `openpulse_send.py --wave sim`
+  drives a **smooth continuous rumble**, `crc=0 bad=0 ovr=0`, `played` ≈ 1 kHz,
+  Ctrl-C silences it with no perceptible latency, CDC `[R]` keeps printing.
+  Fixed during bring-up: PC handshake sends `RESYNC` first (was a spurious
+  startup `gap`); PC keeps a 40 ms lookahead + primes the FIFO (was streaming
+  at exactly 1× → jitter underruns); **`haptic_set_mode()` now flushes the FIFO
+  at request time, not when the ramp completes** — otherwise a PC priming right
+  behind its `SET_MODE(SAMPLES)` had its samples discarded (FIFO stabilised
+  low / underran on any run that caught the box in `IDLE`).
+  **Still to record in `docs/BENCH.md`**: sustained frames/s, scoped
+  end-to-end latency, 1 kHz vs 2 kHz, loss under deliberate overload.
+  Residual (cosmetic): `tick_backlog_max` ~16 at connect (one transient, FIFO
+  absorbs it — lower it with `TRANSPORT_USB_TX_TRACE=0`); `seq_gap` ~2 once at
+  handover.
+
+- `[ ]` **3.6 MS OS 2.0 descriptors (Windows WinUSB auto-bind).** BOS + MS OS
+  2.0 descriptor set (compatible-ID `WINUSB` + a DeviceInterfaceGUID) on
+  interface 2, served via a vendor control request. Needs a Windows machine to
+  verify. Until then Windows users need a one-line Zadig/`libusbK` bind.
 
 ---
 

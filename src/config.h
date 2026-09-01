@@ -145,6 +145,24 @@
 #define HAPTIC_TEST_LINK_BATCH   8       /* samples per DATA_SAMPLES frame */
 
 /* ======================================================================
+ *  USB (Phase 3) — composite device: CDC-ACM (logs) + vendor bulk (protocol)
+ *  docs/HARDWARE.md §5, docs/ARCHITECTURE.md §2 layer 5.
+ * ====================================================================== */
+#define USB_VID                0x1A86u   /* Nanjing Qinheng (WCH) */
+#define USB_PID                0x5730u   /* OpenPulse firmware (composite) */
+
+/* CDC log TX ring (EP1 IN). Power of two. Bytes dropped when full — logs are
+ * best-effort, never block the hot path. */
+#define USB_LOG_RING_SIZE      512u
+
+/* Vendor protocol frame staging (EP2). Each slot holds one 64-byte USB packet
+ * = one protocol frame (<= 60 B, docs/PROTOCOL.md §1). Power of two. RX is
+ * filled by the USB ISR and drained by transport_usb.poll() every main-loop
+ * iteration (sub-ms); TX the reverse, the ISR draining at ~1 frame/ms. */
+#define USB_VENDOR_RX_DEPTH    8u        /* inbound frames buffered from the host */
+#define USB_VENDOR_TX_DEPTH    4u        /* outbound frames queued to the host */
+
+/* ======================================================================
  *  Feature flags
  * ====================================================================== */
 
@@ -160,5 +178,11 @@
 
 /* Bench: run the fine open-loop sweep at boot (STEP 6). */
 #define DRV2605_RUN_SWEEP      1
+
+/* Phase 3: log a one-line decode of every frame the box sends on the vendor
+ * bulk IN endpoint, to the CDC console. Handy for the first bench bring-up
+ * (confirms enumeration + EP2 IN before the PC sender exists); turn off once a
+ * PC dashboard is polling STATUS at ~10 Hz or it floods the log. */
+#define TRANSPORT_USB_TX_TRACE  1
 
 #endif /* CONFIG_H */

@@ -201,7 +201,38 @@ physics; treat them as the design envelope.
 
 ---
 
-## 5. 2.4 GHz radio (Phase 4 — next hardware revision)
+## 5. USB — composite device (Phase 3)
+
+The box enumerates as **one USB Full-Speed device with two functions**:
+
+| Interface(s) | Function | Endpoints | Host sees |
+|---|---|---|---|
+| 0 + 1 (IAD) | CDC-ACM | EP4 IN int 8; EP1 OUT/IN bulk 64 | a `/dev/cu.usbmodem*` serial port — **logs only** |
+| 2 | vendor (class `0xFF`) | EP2 OUT/IN bulk 64 | a libusb-claimable device — **the framed protocol** ([PROTOCOL.md](PROTOCOL.md)) |
+
+- **IDs**: `idVendor 0x1A86` (WCH), `idProduct 0x5730` — `USB_VID` / `USB_PID`
+  in `config.h`. `bDeviceClass 0xEF / 0x02 / 0x01` + an Interface Association
+  Descriptor group interfaces 0–1 as the CDC function. bcdUSB **2.00**.
+- **Endpoint hardware**: the CH570 USB device has EP0..EP4, each bidirectional,
+  64-byte buffers (EP4 shares EP0's RAM region). EP3 is free (RF bridge, §6).
+- `src/usb/usb_device.c` owns the peripheral, `USB_IRQHandler`, the descriptors
+  and the enumeration state machine (evolved from the bench-proven CDC logger).
+  Concurrency model: [ARCHITECTURE.md](ARCHITECTURE.md) §3 — the USB ISR only
+  stages/dequeues 64-byte packets; parsing (`link_rx`) runs in the main loop via
+  `transport_usb.poll()`.
+- **macOS / Linux**: no driver needed. The OS binds its CDC-ACM driver to
+  interfaces 0–1; `libusb` claims interface 2. **Windows**: needs a manual
+  WinUSB bind (Zadig) until the MS OS 2.0 descriptors land (ROADMAP 3.6).
+- ⚠️ **If the device does not enumerate after Phase 3** (regression from the
+  working Phase 0–2 CDC): the likely suspects, in order, are (1) bcdUSB 2.00 —
+  try 1.10; (2) the IAD / `0xEF` device class — some stacks are picky; (3) EP2
+  toggle handling in `USB_DevTransProcess` (it mirrors the proven EP1 path, but
+  EP2 is new). The CDC-only path is recoverable by reverting `s_dev_descr` /
+  `s_cfg_descr` to a single CDC function.
+
+---
+
+## 6. 2.4 GHz radio (Phase 4 — next hardware revision)
 
 - WCH proprietary 2.4 GHz mode. Reference examples: `EVT/EXAM/RF/RF_Basic`,
   `RF_PHY`, and especially **`RF_UartDongle`** (a USB↔RF bridge — the template
@@ -215,7 +246,7 @@ physics; treat them as the design envelope.
 
 ---
 
-## 6. Power
+## 7. Power
 
 - VDD = 5 V to both the MCU domain (through its regulator) and the DRV2605L.
 - Peak actuator current ≈ `4.15 V / 9.65 Ω ≈ 0.43 A` at full impact; sustained

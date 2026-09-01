@@ -7,17 +7,16 @@
  *  DRV2605_BENCH_TOOLS = 1  -> bench bring-up harness (Phase 0):
  *      board -> probe -> autocal -> resonance sweep -> sim-racing demo -> idle.
  *
- *  DRV2605_BENCH_TOOLS = 0  -> renderer (current default):
+ *  DRV2605_BENCH_TOOLS = 0  -> renderer (current default, Phase 3):
  *      board -> DRV2605 open-loop RTP armed -> haptic engine -> SysTick sample
- *      clock -> MODE_SAMPLES fed by the local sim-racing generator ~16 ms ahead
- *      of realtime. With HAPTIC_TEST_VIA_LINK=1 (Phase 2) the generator drives
- *      the real link layer: it frames DATA_SAMPLES and calls link_rx(), plus a
- *      boot PING/SET_CONFIG/SET_MODE handshake and a periodic STATUS_REQ. This
- *      is the exact path USB data will take in Phase 3. Prints '[R]' + '[TX ..]'
- *      lines. Set HAPTIC_TEST_VIA_LINK=0 for the direct-to-FIFO Phase 1 path.
+ *      clock -> composite USB (CDC log + vendor bulk) -> transport_usb binds
+ *      EP2 to the link layer. A connected PC (tools/pc_sender) drives the box
+ *      over the vendor bulk pipe; with no PC, a local sim-racing generator
+ *      feeds link_rx() itself (HAPTIC_TEST_VIA_LINK=1) and steps aside the
+ *      moment real host frames arrive. Prints '[R]' + '[TX ..]' lines.
  *
- *  Host log: 115200 8N1 - macOS `screen /dev/tty.usbmodem* 115200`.
- *  Docs: docs/ (architecture, protocol, hardware, roadmap, build).
+ *  Host log: CDC-ACM, macOS `screen /dev/cu.usbmodem* 115200` (NOT tty.*).
+ *  Docs: docs/ (setup, architecture, protocol, hardware, roadmap, build).
  *******************************************************************************/
 
 #include <string.h>
@@ -36,6 +35,9 @@
 #include "link/link.h"
 #include "link/proto.h"
 #include "util/crc.h"
+#include "usb/usb_device.h"
+#include "usb/usb_vendor.h"
+#include "transport/transport_usb.h"
 
 /* ========================================================================
  *  DRV2605_BENCH_TOOLS = 1  --  Phase 0 bench bring-up
@@ -164,39 +166,13 @@ static uint8_t   g_devid;
 static uint32_t  g_wr_us;         /* measured I2C RTP write time, us/byte */
 
 #if HAPTIC_TEST_VIA_LINK
-/* ---- box -> PC outbound sink. No transport yet (Phase 3 wires USB bulk IN);
- * for now decode the frame and log it, so the link path is observable. ---- */
-static void box_tx(const uint8_t *f, uint16_t n)
-{
-    uint8_t type = f[PROTO_OFF_TYPE];
-    const uint8_t *pl = &f[PROTO_OFF_PAYLOAD];
+/* Local self-test: synthesise PC->box frames and hand them to link_rx() exactly
+ * as transport_usb does, so the box exercises the whole link path with no PC
+ * attached. Suspended as soon as a real host starts sending
+ * (transport_usb.host_active()). box -> PC frames go out on the vendor bulk IN
+ * endpoint and are also traced to the CDC log (TRANSPORT_USB_TX_TRACE). */
+static uint8_t g_rx_seq;
 
-    if (type == TYPE_STATUS_REP &&
-        n >= PROTO_OFF_PAYLOAD + (uint16_t)sizeof(struct stats_msg)) {
-        struct stats_msg m; memcpy(&m, pl, sizeof m);
-        log_printf("[TX STATUS] up=%lus rx=%lu played=%lu crc=%u gap=%u resync=%u "
-                   "bad=%u ovr=%u unr=%u fs=%u fill=%u\r\n",
-                   (uint32_t)m.uptime_s, (uint32_t)m.frames_rx,
-                   (uint32_t)m.samples_played, m.crc_err, m.seq_gap_frames,
-                   m.resync, m.bad_type, m.fifo_overrun, m.fifo_underrun,
-                   m.failsafe_trips, m.fifo_fill);
-    } else if (type == TYPE_CTRL_PONG &&
-               n >= PROTO_OFF_PAYLOAD + (uint16_t)sizeof(struct pong_msg)) {
-        struct pong_msg p; memcpy(&p, pl, sizeof p);
-        log_printf("[TX PONG] nonce=0x%02X fw=%u.%u proto=%u mode=%u\r\n",
-                   p.nonce, p.fw_major, p.fw_minor, p.proto_version, p.mode);
-    } else if (type == TYPE_FAULT &&
-               n >= PROTO_OFF_PAYLOAD + (uint16_t)sizeof(struct fault_msg)) {
-        struct fault_msg fm; memcpy(&fm, pl, sizeof fm);
-        log_printf("[TX FAULT] code=%u detail=%lu\r\n", fm.code, (uint32_t)fm.detail);
-    } else {
-        log_printf("[TX] type=0x%02X len=%u\r\n", type, n);
-    }
-}
-
-static uint8_t g_rx_seq;         /* PC->box SEQ synthesised for the self-test */
-
-/* Frame a message and hand it to link_rx(), exactly as a transport would. */
 static void feed(uint8_t type, const void *payload, uint8_t len)
 {
     uint8_t f[PROTO_MAX_FRAME];
@@ -211,7 +187,7 @@ static void feed(uint8_t type, const void *payload, uint8_t len)
 
 static void renderer_banner(void)
 {
-    log_puts("\r\n=== OpenPulse renderer (Phase 2) ===\r\n");
+    log_puts("\r\n=== OpenPulse renderer (Phase 3) ===\r\n");
     log_printf("  DRV2605: %s  DEVICE_ID=%u (%s)  fw %u.%u  proto v%u\r\n",
                g_probe_ok ? "OK" : "NO ANSWER", g_devid,
                drv2605_devid_str(g_devid),
@@ -226,8 +202,12 @@ static void renderer_banner(void)
                g_wr_us ? (1000000u / g_wr_us) : 0u,
                haptic_config()->sample_rate_hz,
                g_wr_us ? ((uint32_t)haptic_config()->sample_rate_hz * g_wr_us) / 10000u : 0u);
+    log_printf("  USB: %s  vendor rx=%u tx=%u  host=%s\r\n",
+               usb_device_configured() ? "configured" : "not enumerated",
+               usb_vendor_stats()->rx_frames, usb_vendor_stats()->tx_frames,
+               transport_usb.host_active() ? "ACTIVE (PC driving)" : "idle (self-test)");
 #if HAPTIC_TEST_VIA_LINK
-    log_puts("  generator -> DATA_SAMPLES frames -> link_rx() (Phase 2 path).\r\n\r\n");
+    log_puts("  no host: local generator -> link_rx(). PC frames on EP2 take over.\r\n\r\n");
 #else
     log_puts("  MODE_SAMPLES <- local sim-racing generator (direct FIFO).\r\n\r\n");
 #endif
@@ -271,12 +251,15 @@ int main(void)
         g_wr_us = dt ? (dt * 1000u) / 2000u : 0u;
     }
 
+    /* ---- USB vendor transport: bind EP2 <-> link layer ---- */
+    transport_usb.init();                 /* calls link_init(); usb_vendor_set_rx(link_rx) */
+
     /* ---- enter SAMPLES mode ---- */
 #if HAPTIC_TEST_VIA_LINK
-    link_init(box_tx);
     {
-        /* Self-test the control path: PING, a no-op SET_CONFIG (all fields 0 =
-         * keep), then SET_MODE(SAMPLES). Replies are logged by box_tx(). */
+        /* Local self-test of the control path (no PC needed): PING, a no-op
+         * SET_CONFIG (all fields 0 = keep), then SET_MODE(SAMPLES). Replies go
+         * out on EP2 IN and are traced to the CDC log. */
         uint8_t nonce = 0x5A;
         struct config_msg cfg;
         uint8_t mode = MODE_SAMPLES;
@@ -306,8 +289,12 @@ int main(void)
         uint32_t now = time_ticks();
         uint32_t ms  = time_now_ms();
 
-        /* -- producer: keep the FIFO ~lookahead ahead of the tick clock -- */
-        uint8_t feed_on = 1;
+        /* -- deliver protocol frames received from the host (EP2 OUT) -- */
+        transport_usb.poll();            /* -> link_rx() per staged frame */
+
+        /* -- producer: keep the FIFO ~lookahead ahead of the tick clock.
+         *    The local generator only runs while no PC is driving the box. -- */
+        uint8_t feed_on = !transport_usb.host_active();
 #if HAPTIC_TEST_STOP_PROD_S
         if (ms >= (uint32_t)HAPTIC_TEST_STOP_PROD_S * 1000u) feed_on = 0;
 #endif
@@ -359,17 +346,22 @@ int main(void)
             haptic_stats_t *st = haptic_stats();
             st->drv_vbat   = vb;
             st->drv_status = s;
+            const usb_vendor_stats_t *us = usb_vendor_stats();
             log_printf("[R] t=%3lus fifo=%2lu played=%lu ovr=%u unr=%u "
                        "backlog=%u i2c_err=%u fs=%u crc=%u gap=%u rsync=%u bad=%u "
-                       "rx=%lu VBAT~%lumV STAT=0x%02X\r\n",
+                       "rx=%lu  USB[%s urx=%u utx=%u uovr=%u] VBAT~%lumV STAT=0x%02X\r\n",
                        ms / 1000u, haptic_fifo_count(haptic_fifo()),
                        (unsigned long)st->samples_played, st->fifo_overrun,
                        st->fifo_underrun, st->tick_backlog_max, st->i2c_err,
                        st->failsafe_trips, st->crc_err, st->seq_gap_frames,
                        st->resync, st->bad_type, (unsigned long)st->frames_rx,
+                       transport_usb.host_active() ? "HOST" : "self",
+                       us->rx_frames, us->tx_frames,
+                       (uint16_t)(us->rx_overrun + us->rx_oversize + us->tx_overrun),
                        (uint32_t)vb * 5600u / 255u, s);
 #if HAPTIC_TEST_VIA_LINK
-            feed(TYPE_STATUS_REQ, NULL, 0);     /* exercise the STATUS_REP path */
+            if (!transport_usb.host_active())
+                feed(TYPE_STATUS_REQ, NULL, 0);   /* self-test the STATUS_REP path */
 #endif
         }
     }

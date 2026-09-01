@@ -1,12 +1,12 @@
 /******************************************************************************
  * log.h — logging facade.
  *
- * Phase 0: forwards to the existing USB CDC-ACM logger (src/usb_log.c). The
- * output is byte-identical to the old direct USB_Log_* calls.
+ * Forwards to the CDC-ACM channel of the composite USB device
+ * (src/usb/usb_cdc.h). Human-readable text only; the framed protocol has its
+ * own path (docs/PROTOCOL.md, src/link/).
  *
- * Later (Phase 3) log.c gains log_set_sink() so the same calls can target a
- * LOG protocol frame, the PA7 debug UART, or the RF back-channel — see
- * docs/ARCHITECTURE.md §2 and §"logging".
+ * Phase 3.3 will add log_set_sink() so the same calls can target a TYPE_LOG
+ * protocol frame or the PA7 debug UART — see docs/ARCHITECTURE.md §2.
  *
  * RULE: never call from an ISR (docs/README.md rule 4). ISRs bump counters.
  *****************************************************************************/
@@ -14,7 +14,7 @@
 #define LOG_H
 
 #include <stdint.h>
-#include "usb_log.h"
+#include "usb/usb_cdc.h"
 
 typedef enum { LOG_ERR = 0, LOG_WARN = 1, LOG_INFO = 2, LOG_DBG = 3 } log_level_t;
 
@@ -23,16 +23,15 @@ typedef enum { LOG_ERR = 0, LOG_WARN = 1, LOG_INFO = 2, LOG_DBG = 3 } log_level_
 #define LOG_MIN_LEVEL  LOG_DBG
 #endif
 
-void    log_init(void);            /* = USB_Log_Init()                 */
-uint8_t log_is_connected(void);    /* = USB_Log_IsConnected()          */
+void    log_init(void);            /* = usb_device_init()  */
+uint8_t log_is_connected(void);    /* = usb_device_configured() */
 
-/* Raw, no level tag — used by the bench harness to keep its exact output. */
-#define log_puts(s)      USB_Log_Print((s))
-#define log_printf(...)  USB_Log_Printf(__VA_ARGS__)
+/* Raw, no level tag. */
+#define log_puts(s)      usb_cdc_write((s))
+#define log_printf(...)  usb_cdc_printf(__VA_ARGS__)
 
-/* Levelled. Phase 0: no prefix is added (output unchanged); only the
- * compile-time LOG_MIN_LEVEL filter applies. */
-#define LOG_AT(lvl, ...)  do { if ((lvl) <= LOG_MIN_LEVEL) USB_Log_Printf(__VA_ARGS__); } while (0)
+/* Levelled. Phase 3.3: no prefix added yet; only the compile-time filter. */
+#define LOG_AT(lvl, ...)  do { if ((lvl) <= LOG_MIN_LEVEL) usb_cdc_printf(__VA_ARGS__); } while (0)
 #define LOGE(...)  LOG_AT(LOG_ERR,  __VA_ARGS__)
 #define LOGW(...)  LOG_AT(LOG_WARN, __VA_ARGS__)
 #define LOGI(...)  LOG_AT(LOG_INFO, __VA_ARGS__)

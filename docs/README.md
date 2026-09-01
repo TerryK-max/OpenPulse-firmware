@@ -30,18 +30,23 @@ A small USB / 2.4 GHz haptic-feedback box for **sim racing**.
 
 ---
 
-## 2. Current state (2026-09-01)
+## 2. Current state (2026-09-02)
 
-**Phases 0, 1 and 2 are done.** Phase 1 is bench-confirmed (34 s of clean `[R]`
-telemetry — [ROADMAP.md](ROADMAP.md) ticket 1.5). Phase 2 added the
-transport-agnostic **link layer**: `src/link/proto.h` (frozen wire contract),
-`src/util/crc.c` (CRC-8/SMBUS), `src/link/link.c` (framing / CRC / SEQ / gap /
-dispatch + outbound builders) and `src/link/link_control.c` (`CTRL_*` handlers).
-A host unit harness under `tools/test/` (`make test`) covers it — 83 checks.
+**Phases 0–3 are implemented** (Phase 3 awaits its on-bench check —
+[ROADMAP.md](ROADMAP.md) 3.5). Phase 1 is bench-confirmed. Phase 2 is the
+transport-agnostic **link layer** (`src/link/`, `src/util/crc.c`), covered by a
+host harness (`make test`, 83 checks). Phase 3 made USB a **composite device**:
 
-The renderer now drives that link layer by default: `HAPTIC_TEST_VIA_LINK=1`
-makes the local generator frame `DATA_SAMPLES` and call `link_rx()`, the same
-path Phase 3's USB bulk OUT will use. The bench bring-up harness is still one
+- `src/usb/usb_device.c` — CDC-ACM (interfaces 0–1, the `/dev/cu.usbmodem*` log
+  port) **+** a vendor bulk interface (2, EP2) carrying the framed protocol.
+  `usb_cdc.h` / `usb_vendor.h` are the two channel APIs.
+- `src/transport/transport_usb.c` — binds EP2 ↔ `link` (`link_rx` on the main
+  loop, `link_tx_*` → EP2 IN).
+- `tools/pc_sender/` — Python reference sender (pyusb) + `proto.py`.
+
+The renderer runs a **local self-test** when no PC is attached (the generator
+frames `DATA_SAMPLES` into `link_rx()`); it steps aside the instant a PC starts
+sending on EP2. The bench bring-up harness is still one
 `#define DRV2605_BENCH_TOOLS 1` away.
 
 | Path | What it is |
@@ -55,9 +60,11 @@ path Phase 3's USB bulk OUT will use. The bench bring-up harness is still one
 | `src/haptic/` | `haptic_fifo.h` (SPSC int8 ring); `haptic_engine.{c,h}` (tick / modes / config / stats / failsafe / `haptic_abort` / `haptic_now_ms`); `haptic_patterns.{c,h}` (`haptic_pattern_simracing` generator, `haptic_pulse`, `haptic_demo_simracing`). |
 | `src/link/` | `proto.h` (FROZEN wire contract, mirror of `tools/proto/proto.h`); `link.{c,h}` (framing / CRC / SEQ / gap / dispatch + `link_tx_*` builders, transport-agnostic); `link_control.{c,h}` (`CTRL_*` handlers). See [PROTOCOL.md](PROTOCOL.md). |
 | `src/util/crc.{c,h}` | CRC-8/SMBUS (poly 0x07). `proto_crc8()` alias. |
-| `src/log/log.{c,h}` | Logging facade over `usb_log.c` (levels + macros; runtime sink switch = Phase 3.3). |
+| `src/usb/` | `usb_device.{c,h}` — composite CDC + vendor-bulk device (descriptors, enumeration, `USB_IRQHandler`, all EP dispatch); `usb_cdc.h` (log channel); `usb_vendor.h` (protocol channel, EP2). See [HARDWARE.md](HARDWARE.md) §5. |
+| `src/transport/` | `transport.h` (`transport_t` vtable); `transport_usb.{c,h}` (binds EP2 ↔ `link`). |
+| `src/log/log.{c,h}` | Logging facade → `usb_cdc` (levels + macros; runtime sink switch = Phase 3.3, deferred). |
 | `tools/proto/`, `tools/test/` | Byte-identical `proto.h` copy for the PC; host unit harness for `src/link/` (`make test`). |
-| `src/usb_log.c` / `.h` | Hand-rolled USB CDC-ACM logger. Phase 3 folds this into `src/usb/`. |
+| `tools/pc_sender/` | Python reference sender (`openpulse_send.py` + `proto.py`) — streams a waveform over the vendor pipe, prints the STATUS dashboard. |
 | `Startup/`, `Ld/`, `RVMSIS/`, `StdPeriphDriver/` | WCH vendor SDK — **not in git** (their copyright). Fetch per [SETUP.md](SETUP.md). **Do not edit.** |
 | `EVT/` | WCH evaluation package + converted datasheets. **Not in git.** Fetch per [SETUP.md](SETUP.md). Reference only. |
 | `docs/vendor/` | Place third-party datasheets here for offline reference — `.gitignore`d ([vendor/README.md](vendor/README.md)). |

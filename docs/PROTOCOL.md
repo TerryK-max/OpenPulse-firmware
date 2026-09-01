@@ -30,6 +30,11 @@ a packet.
 All multi-byte integer fields are **little-endian** (matches x86 and the RV32
 core).
 
+**USB is live (Phase 3):** vendor interface 2, `EP2 OUT` (0x02) / `EP2 IN`
+(0x82), `idVendor:idProduct` `1A86:5730`. Firmware side: `src/usb/usb_vendor.h`
++ `src/transport/transport_usb.c`. Host side: `tools/pc_sender/` (pyusb). The
+CDC interfaces (0–1) are a plain serial port for logs and never carry frames.
+
 ---
 
 ## 2. Frame layout

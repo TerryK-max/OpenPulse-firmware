@@ -6,6 +6,11 @@
 /tools/test/run_tests
 /tools/test/run_tests.dSYM/
 
+# ── Python (tools/pc_sender) ──────────────────────────────────────────
+__pycache__/
+*.pyc
+/tools/pc_sender/.venv/
+
 # ── Third-party SDK / package — NOT redistributed. See docs/SETUP.md ────
 # WCH CH57x peripheral driver, startup, CMSIS, linker script and the WCH
 # evaluation package. Download from wch.cn / MounRiver Studio and drop the

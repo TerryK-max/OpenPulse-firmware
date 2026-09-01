@@ -23,7 +23,7 @@ This repository is the **box firmware**. Runs on a WCH CH570D.
 | 0 — modular refactor + standalone build | done |
 | 1 — haptic engine, SPSC FIFO, SysTick tick, failsafe | done, bench-confirmed |
 | 2 — transport-agnostic link layer + wire protocol v1 | done (host tests green) |
-| 3 — USB composite device (CDC + vendor bulk) + PC sender | next |
+| 3 — USB composite device (CDC + vendor bulk) + Python PC sender | done, bench check pending |
 | 4 — 2.4 GHz transport + dongle | needs the next board revision |
 | 5–6 — high-rate PWM path (optional), production hardening | planned |
 
@@ -41,6 +41,13 @@ make test       # host unit tests for the link layer (no toolchain needed)
 ```
 
 MounRiver Studio users: open `CH570D.wvproj`. See [docs/BUILD.md](docs/BUILD.md).
+
+Drive the box from a PC (Phase 3):
+
+```bash
+cd tools/pc_sender && pip install -r requirements.txt
+python3 openpulse_send.py --wave sim --duration 20
+```
 
 ## Documentation
 

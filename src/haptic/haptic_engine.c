@@ -109,6 +109,12 @@ uint32_t               haptic_now_ms(void)   { return time_now_ms(); }
 
 void haptic_set_mode(haptic_mode_t m)
 {
+    /* Discard whatever was queued for the OLD mode now, at request time — not
+     * when the ramp-through-0 completes. Samples the producer pushes *after*
+     * this call are for the new mode (e.g. a PC priming the FIFO right behind
+     * its SET_MODE(SAMPLES)) and must survive the transition. */
+    if (m != s_mode || m != s_pending_mode)
+        haptic_fifo_reset(&s_fifo);
     s_pending_mode = m;
     haptic_notify_data();
 }
@@ -165,7 +171,8 @@ void haptic_tick(void)
         out = step_toward_zero(s_last_out, s_decay_step);
         if (out == 0) {
             s_mode = s_pending_mode;
-            haptic_fifo_reset(&s_fifo);
+            /* FIFO was already flushed in haptic_set_mode(); anything here now
+             * was pushed for this (new) mode. */
             s_env_current = 0;
             s_local_idx = 0;
         }
