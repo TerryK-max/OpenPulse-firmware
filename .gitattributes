@@ -1,0 +1,4 @@
+# Store every file byte-exact: no end-of-line conversion. The vendor SDK
+# (StdPeriphDriver/, RVMSIS/, Startup/, EVT/) ships CRLF files and we want them
+# committed unchanged; project files under src/ and tools/ are authored LF.
+* -text

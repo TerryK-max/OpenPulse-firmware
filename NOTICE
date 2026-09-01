@@ -1,0 +1,19 @@
+OpenPulse (firmware)
+Copyright 2026 Maxime Bault
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+--------------------------------------------------------------------------------
+
+This repository ships only the project's own source (src/, tools/, docs/,
+Makefile and the MounRiver Studio project files).
+
+It does NOT include, and the Apache-2.0 licence above does NOT cover, the
+third-party components required to build the firmware — the WCH CH57x SDK, the
+WCH evaluation package, and any datasheets. Those are the property of their
+respective owners and are subject to their own licence terms. See THIRD_PARTY.md
+and docs/SETUP.md.

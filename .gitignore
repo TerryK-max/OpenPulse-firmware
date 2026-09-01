@@ -1,0 +1,32 @@
+# ── Build output ────────────────────────────────────────────────────────
+/build/
+/obj/
+
+# ── Host unit-test binaries (tools/test — see docs/BUILD.md §6) ─────────
+/tools/test/run_tests
+/tools/test/run_tests.dSYM/
+
+# ── Third-party SDK / package — NOT redistributed. See docs/SETUP.md ────
+# WCH CH57x peripheral driver, startup, CMSIS, linker script and the WCH
+# evaluation package. Download from wch.cn / MounRiver Studio and drop the
+# folders in here; they are required to build but are not ours to publish.
+/StdPeriphDriver/
+/Startup/
+/RVMSIS/
+/Ld/
+/EVT/
+
+# TI DRV2605L datasheet (SLOS854C) and any other vendor PDFs/extracts kept
+# locally for offline reference — TI copyright, do not commit.
+/docs/vendor/*.txt
+/docs/vendor/*.pdf
+
+# ── Editor / IDE / tooling ─────────────────────────────────────────────
+.vscode/
+.mrs/
+*.snapshot
+
+# ── OS cruft ──────────────────────────────────────────────────────────
+.DS_Store
+*.swp
+*~
