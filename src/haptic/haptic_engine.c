@@ -102,6 +102,14 @@ void haptic_engine_init(void)
     (void)drv2605_set_amplitude(0);
 }
 
+void haptic_stats_reset(void)
+{
+    uint8_t drv_status = s_stats.drv_status, drv_vbat = s_stats.drv_vbat;
+    memset(&s_stats, 0, sizeof s_stats);
+    s_stats.drv_status = drv_status;   /* keep the last hardware snapshot */
+    s_stats.drv_vbat   = drv_vbat;
+}
+
 const haptic_config_t *haptic_config(void) { return &s_cfg; }
 haptic_stats_t        *haptic_stats(void)  { return &s_stats; }
 haptic_fifo_t         *haptic_fifo(void)   { return &s_fifo; }

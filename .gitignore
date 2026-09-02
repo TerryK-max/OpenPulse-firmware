@@ -35,3 +35,6 @@ __pycache__/
 .DS_Store
 *.swp
 *~
+
+# bench.py output — regenerated per run; conclusions go in docs/BENCH.md §3
+/docs/BENCH-results.md

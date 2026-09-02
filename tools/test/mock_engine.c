@@ -34,6 +34,8 @@ void haptic_engine_init(void)
     g_mock.mode = HAPTIC_MODE_IDLE;
 }
 
+void haptic_stats_reset(void) { memset(&s_stats, 0, sizeof s_stats); }
+
 const haptic_config_t *haptic_config(void) { return &s_cfg; }
 haptic_stats_t        *haptic_stats(void)  { return &s_stats; }
 haptic_fifo_t         *haptic_fifo(void)   { return &s_fifo; }

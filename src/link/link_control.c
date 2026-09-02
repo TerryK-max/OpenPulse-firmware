@@ -60,6 +60,9 @@ static void handle_set_config(const uint8_t *payload, uint8_t len)
     c.underrun_decay_ms = m.underrun_decay_ms;
     haptic_apply_config(&c);          /* staged; haptic_service() applies it */
 
+    if (m.flags & PROTO_CFG_FLAG_RESET_STATS)
+        haptic_stats_reset();         /* clean baseline for tools/bench */
+
     link_set_data_blocked(0);         /* version matched -> data plane open */
     /* m.flags PROTO_CFG_FLAG_PERSIST is Phase 6 — accepted here, not acted on. */
 

@@ -14,6 +14,10 @@ PROTO_MAX_PAYLOAD = 56
 PROTO_MAX_FRAME = PROTO_MAX_PAYLOAD + 4
 PROTO_RESYNC_GAP = 16
 
+# config_msg.flags bits (docs/PROTOCOL.md §4.3)
+CFG_FLAG_PERSIST = 0x01        # bit0: persist to DataFlash (Phase 6)
+CFG_FLAG_RESET_STATS = 0x02    # bit1: zero the STATUS_REP counters
+
 # message types --------------------------------------------------------------
 TYPE_DATA_SAMPLES = 0x01
 TYPE_ENVELOPE = 0x02

@@ -308,6 +308,36 @@ static void t_set_config_bad_field(void)
     rx(TYPE_CTRL_SET_CONFIG, 0, junk, sizeof junk);
     CHECK(cap_find(TYPE_FAULT) >= 0, "short config payload -> FAULT");
     CHECK(g_mock.apply_config_calls == 0, "short config not applied");
+
+    /* bit outside the flags mask is rejected */
+    setup();
+    memset(&c, 0, sizeof c);
+    c.version = PROTO_VERSION;
+    c.flags = 0x80;
+    rx(TYPE_CTRL_SET_CONFIG, 0, &c, sizeof c);
+    CHECK(cap_find(TYPE_FAULT) >= 0, "unknown flags bit -> FAULT");
+    CHECK(g_mock.apply_config_calls == 0, "not applied on bad flags");
+}
+
+static void t_set_config_reset_stats(void)
+{
+    setup();
+    /* dirty a couple of counters */
+    uint8_t s3[3] = { 1, 2, 3 };
+    uint8_t bad[4] = { 0 };
+    { uint8_t f[16]; uint16_t n = build(f, TYPE_DATA_SAMPLES, 0, s3, 3); f[n-1] ^= 0xFF; link_rx(f, n); }
+    rx(0x55, 1, NULL, 0);                       /* unknown type -> bad_type++ */
+    CHECK(haptic_stats()->crc_err >= 1 && haptic_stats()->bad_type >= 1, "counters dirtied");
+    (void)bad;
+
+    struct config_msg c;
+    memset(&c, 0, sizeof c);
+    c.version = PROTO_VERSION;
+    c.flags = PROTO_CFG_FLAG_RESET_STATS;
+    rx(TYPE_CTRL_SET_CONFIG, 2, &c, sizeof c);
+    CHECK(g_mock.apply_config_calls == 1, "config still applied with reset flag");
+    CHECK(haptic_stats()->crc_err == 0 && haptic_stats()->bad_type == 0, "counters zeroed");
+    CHECK(cap_find(TYPE_STATUS_REP) >= 0, "STATUS_REP after reset");
 }
 
 static void t_version_mismatch(void)
@@ -418,6 +448,7 @@ int main(void)
     t_status_rep();
     t_set_config_ok();
     t_set_config_bad_field();
+    t_set_config_reset_stats();
     t_version_mismatch();
     t_set_mode();
     t_envelope();

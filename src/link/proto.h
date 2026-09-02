@@ -84,8 +84,9 @@ enum { PROTO_LOG_ERR = 0, PROTO_LOG_WARN = 1, PROTO_LOG_INFO = 2, PROTO_LOG_DBG 
 #define PROTO_FAILSAFE_MAX     2000
 #define PROTO_OLP_MAX          127      /* reg 0x20 is [6:0] */
 #define PROTO_AMP_MAX          127
-#define PROTO_CFG_FLAG_PERSIST 0x01     /* bit0: persist to DataFlash (Phase 6) */
-#define PROTO_CFG_FLAG_MASK    0x01     /* bits outside this must be 0 */
+#define PROTO_CFG_FLAG_PERSIST     0x01 /* bit0: persist to DataFlash (Phase 6) */
+#define PROTO_CFG_FLAG_RESET_STATS 0x02 /* bit1: zero the STATUS_REP counters */
+#define PROTO_CFG_FLAG_MASK        0x03 /* bits outside this must be 0 */
 
 /* ---- payload structs -------------------------------------------------- */
 

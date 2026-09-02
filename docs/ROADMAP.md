@@ -196,11 +196,25 @@ RAM 6.3 KB / 12). `make test` still 83/0.
   `src/bench/bench_trace.h` toggling PA4 (per frame) / PA10 (per render tick)
   for the scope; `bench.py --latency-probe` drives a scope-friendly stream;
   `docs/BENCH.md` has the full procedure + a results table to fill.
-  **To do (at the bench, needs a scope — user has school access in the coming
-  days)**: run `bench.py --all`; then the analog measurements (§2 of BENCH.md).
-  Residual (cosmetic): `tick_backlog_max` ~16 at connect (one transient, FIFO
-  absorbs it — lower it with `TRANSPORT_USB_TX_TRACE=0`); `seq_gap` ~2 once at
-  handover.
+  **First bench run (2026-09-02) — partial, found a bug:**
+  - ✅ **RTT PC↔box** min 1.72 / p50 **1.78** / p95 1.91 / max 6.9 ms → the
+    *pipeline* latency (frame in → playable) is ~1–2 ms; everything above that
+    is the deliberate PC lookahead buffer, so it can be cut hard if latency
+    ever matters more than jitter safety.
+  - ✅ **`dev.write()`** p50 **86 µs** → PC can push ~11.6 k frames/s.
+  - ✅ **failsafe** ~**105 ms** for a 100 ms setting (4/5 runs; the 5th was a
+    stale-counter artefact, since fixed with the reset-stats flag).
+  - 🐛 **throughput sweep + overload were invalid**: `time_tick_start()` reset
+    the monotonic tick counter, so every `SET_CONFIG` rate change desynced the
+    main loop's `serviced`/`produced` → `pending` underflow → `tick_backlog_max`
+    pinned at 65535 and the renderer wedged. **Fixed**: `s_ticks` is now
+    free-running for the session; a rate change only re-bases `time_now_ms()`.
+    Also added the `SET_CONFIG` flags-bit1 **reset counters** so each sweep step
+    has a clean baseline. **Re-run needed after reflash.**
+  **Still to do (needs a scope — user has school access in the coming days)**:
+  re-run `bench.py --all`; then the analog measurements (§2 of BENCH.md).
+  Residual (cosmetic): `tick_backlog_max` ~16 at connect (FIFO absorbs it —
+  lower with `TRANSPORT_USB_TX_TRACE=0`); `seq_gap` ~2 once at handover.
 
 - `[ ]` **3.6 MS OS 2.0 descriptors (Windows WinUSB auto-bind).** BOS + MS OS
   2.0 descriptor set (compatible-ID `WINUSB` + a DeviceInterfaceGUID) on

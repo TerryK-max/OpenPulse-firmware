@@ -25,11 +25,13 @@ python3 bench.py --all --out ../../docs/BENCH-results.md      # ~2 min, overwrit
 
 `bench.py --all` sweeps the sample rate (500…4000 Hz), blasts the pipe
 unpaced to check graceful degradation, times the failsafe, and measures the
-PING→PONG round-trip and the raw `dev.write()` cost. It writes a dated markdown
-report (tables + a copy of §2 below) to `--out`.
+PING→PONG round-trip and the raw `dev.write()` cost. Each step first sends
+`SET_CONFIG` with the reset-stats flag ([PROTOCOL.md](PROTOCOL.md) §4.3 flags
+bit1) so counters start from zero. It writes a dated markdown report (tables +
+a copy of §2 below) to `--out`.
 
-Results live in **`docs/BENCH-results.md`** (regenerated, not hand-edited).
-Not run yet on this machine.
+The output file (`docs/BENCH-results.md`) is `.gitignore`d — it is per-run and
+per-machine. Copy the numbers that matter into §3 below.
 
 **Reading the throughput sweep:** the highest rate row still marked `clean ✅`
 (Δunr = Δovr = Δcrc = 0) is the real sustainable ceiling of the *whole* path

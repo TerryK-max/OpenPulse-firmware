@@ -96,13 +96,14 @@ class BenchBox:
         return self._stats
 
     # helpers -------------------------------------------------------------
-    def handshake(self, rate, failsafe):
+    def handshake(self, rate, failsafe, reset_stats=True):
+        flags = proto.CFG_FLAG_RESET_STATS if reset_stats else 0
         self.send(proto.TYPE_RESYNC)
         self.send(proto.TYPE_CTRL_PING, bytes([0x01]))
         self.send(proto.TYPE_CTRL_SET_CONFIG,
-                  proto.config_msg(sample_rate_hz=rate, failsafe_ms=failsafe))
+                  proto.config_msg(sample_rate_hz=rate, failsafe_ms=failsafe, flags=flags))
         self.send(proto.TYPE_CTRL_SET_MODE, bytes([proto.MODE_SAMPLES]))
-        time.sleep(0.05)
+        time.sleep(0.1)              # let the tick rate + config settle
 
     def idle(self):
         try:

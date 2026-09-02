@@ -135,7 +135,8 @@ struct env_cmd {         /* 2 bytes */
 struct config_msg {              /* 12 bytes, little-endian */
     uint8_t  version;            /* must == PROTO_VERSION            */
     uint8_t  flags;              /* bit0: persist to DataFlash (Phase 6)
-                                   bit1..7: reserved, send 0        */
+                                   bit1: zero the STATUS_REP counters
+                                   bit2..7: reserved, send 0        */
     uint8_t  ol_lra_period;      /* DRV2605 reg 0x20; 0 = keep       */
     uint8_t  od_clamp;           /* DRV2605 reg 0x17; 0 = keep       */
     uint16_t sample_rate_hz;     /* 250..4000; 0 = keep             */
@@ -150,7 +151,10 @@ struct config_msg {              /* 12 bytes, little-endian */
   `TYPE_FAULT` with `code = FAULT_BAD_CONFIG` and applies **nothing**.
 - On success it applies the changes (re-runs `drv2605_lra_configure()` if
   `ol_lra_period`/`od_clamp` changed, reprograms SysTick if `sample_rate_hz`
-  changed) and replies `TYPE_STATUS_REP`.
+  changed — the tick counter stays monotonic across the change), zeroes the
+  `STATUS_REP` counters if `flags` bit1 is set, and replies `TYPE_STATUS_REP`.
+  Defining a `flags` bit is a forward-compatible extension — no `PROTO_VERSION`
+  bump (layout and every other field are unchanged; old senders sent 0).
 - `ol_lra_period` maps to frequency as `f = 1e6 / (ol_lra_period × 98.46)` Hz.
   The bench value today is **64 → ~158.7 Hz** (see [HARDWARE.md](HARDWARE.md)).
 

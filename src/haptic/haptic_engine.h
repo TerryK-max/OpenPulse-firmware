@@ -60,6 +60,7 @@ typedef struct {
 } haptic_stats_t;
 
 void                   haptic_engine_init(void);   /* seed from config.h, mode IDLE, arm DRV2605 */
+void                   haptic_stats_reset(void);   /* zero all counters (bench / dashboard) */
 const haptic_config_t *haptic_config(void);
 haptic_stats_t        *haptic_stats(void);
 haptic_fifo_t         *haptic_fifo(void);          /* for direct fill / fill-level */
