@@ -125,9 +125,12 @@
 #define HAPTIC_LOSS_POLICY       0       /* [RUNTIME] 0 = zero-fill, 1 = hold-last (link layer) */
 #define HAPTIC_UNDERRUN_DECAY_MS 20      /* [RUNTIME] ramp-to-0 time on FIFO underrun */
 
-/* Sample FIFO depth (power of two). ~128 ms at 1 kHz. Bigger = more loss
- * tolerance, more latency. */
-#define HAPTIC_FIFO_CAP          128u
+/* Sample FIFO depth (power of two). 256 ms at 1 kHz / 64 ms at 4 kHz. This is
+ * a ceiling, not a target — the actual fill is set by the sender's lookahead
+ * (tools/pc_sender), so a bigger cap adds loss/jitter tolerance without adding
+ * latency. 256 keeps high-rate streaming smooth against host-pacing jitter
+ * (docs/BENCH.md). */
+#define HAPTIC_FIFO_CAP          256u
 
 /* Phase 1 pipeline test: the main loop feeds the FIFO from the built-in
  * sim-racing generator, ~16 ms ahead of realtime.

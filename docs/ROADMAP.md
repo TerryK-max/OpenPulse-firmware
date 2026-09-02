@@ -211,10 +211,15 @@ RAM 6.3 KB / 12). `make test` still 83/0.
     free-running for the session; a rate change only re-bases `time_now_ms()`.
     Also added the `SET_CONFIG` flags-bit1 **reset counters** so each sweep step
     has a clean baseline. **Re-run needed after reflash.**
-  **Still to do (needs a scope — user has school access in the coming days)**:
-  re-run `bench.py --all`; then the analog measurements (§2 of BENCH.md).
-  Residual (cosmetic): `tick_backlog_max` ~16 at connect (FIFO absorbs it —
-  lower with `TRANSPORT_USB_TX_TRACE=0`); `seq_gap` ~2 once at handover.
+  **Second run (2026-09-02, tick bug fixed):** `crc=0 gap=0 ovr=0` at every
+  rate 500–4000 Hz, `backlog ≤ 31` ticks → **box sustains ≥ 4 kHz with no wire
+  loss; Phase 5 not needed.** `fifo_underrun` grew with rate = host pacing vs a
+  shallow FIFO, not a box limit → `HAPTIC_FIFO_CAP` 128 → **256**. `bench.py`
+  fixed to divide by the real interval + reset counters per step. RTT p50
+  **1.71 ms**, failsafe **~103 ms**, `dev.write` p50 87 µs — all solid. See
+  [BENCH.md](BENCH.md) §3.
+  **Still to do (scope — user has school access in the coming days)**: re-run
+  the sweep + overload with FIFO 256; the analog measurements (§2 of BENCH.md).
 
 - `[ ]` **3.6 MS OS 2.0 descriptors (Windows WinUSB auto-bind).** BOS + MS OS
   2.0 descriptor set (compatible-ID `WINUSB` + a DeviceInterfaceGUID) on

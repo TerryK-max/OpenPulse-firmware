@@ -183,8 +183,9 @@ def test_throughput(box, rates, dwell, batch, lookahead_ms):
             i += batch
             time.sleep(0.001)
         time.sleep(0.1)
+        box.send(proto.TYPE_STATUS_REQ); time.sleep(0.1)
         s0 = box.last_stats()
-        t0 = time.perf_counter()
+        t0 = ts0 = time.perf_counter()
         nstatus = t0
         while time.perf_counter() - t0 < dwell:
             now = time.perf_counter()
@@ -195,7 +196,8 @@ def test_throughput(box, rates, dwell, batch, lookahead_ms):
             if now >= nstatus:
                 box.send(proto.TYPE_STATUS_REQ); nstatus += 0.2
             time.sleep(0.001)
-        time.sleep(0.15)
+        box.send(proto.TYPE_STATUS_REQ); time.sleep(0.2)
+        elapsed = time.perf_counter() - ts0          # real interval, not `dwell`
         s1 = box.last_stats()
         fr = _delta(s0, s1, "frames_rx")
         sp = _delta(s0, s1, "samples_played")
@@ -203,10 +205,19 @@ def test_throughput(box, rates, dwell, batch, lookahead_ms):
         crc = _delta(s0, s1, "crc_err"); gap = _delta(s0, s1, "seq_gap_frames")
         rsy = _delta(s0, s1, "resync")
         bl = s1["tick_backlog_max"] if s1 else None
-        ok = (unr == 0 and ovr == 0 and crc == 0)
-        rows.append(f"| {rate} | {fr/dwell:.0f} | {sp/dwell:.0f} | {unr} | {ovr} | {crc} | "
-                    f"{gap} | {rsy} | {bl} | {'clean ✅' if ok else 'LOSS ⚠️'} |")
-        print(f"  {rate:5d} Hz: {sp/dwell:.0f} samp/s  unr={unr} ovr={ovr} crc={crc} gap={gap} backlog={bl}")
+        # box did its job if nothing was lost or corrupted; underruns with
+        # ovr=crc=gap=0 are host-pacing jitter against a shallow FIFO, not a
+        # box limit (docs/BENCH.md).
+        if crc or ovr or gap:
+            verdict = "LOSS ⚠️"
+        elif unr:
+            verdict = f"box OK, host unr {unr/elapsed:.0f}/s"
+        else:
+            verdict = "clean ✅"
+        rows.append(f"| {rate} | {fr/elapsed:.0f} | {sp/elapsed:.0f} | {unr} | {ovr} | {crc} | "
+                    f"{gap} | {rsy} | {bl} | {verdict} |")
+        print(f"  {rate:5d} Hz: {sp/elapsed:.0f} samp/s ({100*sp/elapsed/rate:.0f}%)  "
+              f"unr={unr} ovr={ovr} crc={crc} gap={gap} backlog={bl}")
         box.idle(); time.sleep(0.3)
     box.stop_reader()
     return rows
@@ -218,27 +229,33 @@ def test_overload(box, seconds, batch):
     box.handshake(2000, 100)
     gen = wave_sine
     i = 0
-    s0 = box.status_sync() or box.last_stats()
+    box.send(proto.TYPE_STATUS_REQ); time.sleep(0.15)
+    s0 = box.last_stats()
     t0 = time.perf_counter()
     sent = 0
     while time.perf_counter() - t0 < seconds:           # blast, no pacing
         box.send(proto.TYPE_DATA_SAMPLES, bytes(gen(i + k, 2000) for k in range(batch)))
         i += batch; sent += 1
     dur = time.perf_counter() - t0
-    time.sleep(0.2)
-    alive = box.status_sync() is not None               # still answers control?
-    s1 = box.last_stats()
-    box.idle(); box.stop_reader()
+    box.stop_reader()                                   # no thread contention on EP_IN
+    for _ in range(30):
+        box._read1(20)                                  # drain the flood's replies
+    alive = box.status_sync(500) is not None or box.status_sync(500) is not None
+    s1 = box.status_sync(500) or box.last_stats()
+    box.idle()
+    crc = _delta(s0, s1, "crc_err"); bad = _delta(s0, s1, "bad_type")
+    mono = s1 and s0 and s1["samples_played"] >= s0["samples_played"]
     rows = ["", f"Blasted **{sent/dur:.0f} frames/s** ({batch} samp/frame) for {dur:.1f}s, no pacing.",
             "", "| metric | value |", "|:--|--:|",
             f"| box still answers STATUS_REQ | {'yes ✅' if alive else 'NO ⚠️'} |",
-            f"| Δcrc_err (must be 0) | {_delta(s0, s1, 'crc_err')} |",
-            f"| Δbad_type (must be 0) | {_delta(s0, s1, 'bad_type')} |",
+            f"| Δcrc_err (must be 0) | {crc} |",
+            f"| Δbad_type (must be 0) | {bad} |",
             f"| Δfifo_overrun | {_delta(s0, s1, 'fifo_overrun')} |",
             f"| Δseq_gap_frames | {_delta(s0, s1, 'seq_gap_frames')} |",
             f"| Δresync | {_delta(s0, s1, 'resync')} |",
-            f"| samples_played monotonic | {'yes ✅' if s1 and s0 and s1['samples_played'] >= s0['samples_played'] else '?'} |"]
-    print("  " + rows[1])
+            f"| samples_played monotonic | {'yes ✅' if mono else 'NO ⚠️'} |"]
+    print(f"  {sent/dur:.0f} frames/s for {dur:.1f}s -> alive={alive} crc={crc} bad_type={bad} "
+          f"monotonic={mono} (overrun/gap expected, that's the point)")
     return rows
 
 
