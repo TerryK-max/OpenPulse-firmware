@@ -211,15 +211,14 @@ RAM 6.3 KB / 12). `make test` still 83/0.
     free-running for the session; a rate change only re-bases `time_now_ms()`.
     Also added the `SET_CONFIG` flags-bit1 **reset counters** so each sweep step
     has a clean baseline. **Re-run needed after reflash.**
-  **Second run (2026-09-02, tick bug fixed):** `crc=0 gap=0 ovr=0` at every
-  rate 500–4000 Hz, `backlog ≤ 31` ticks → **box sustains ≥ 4 kHz with no wire
-  loss; Phase 5 not needed.** `fifo_underrun` grew with rate = host pacing vs a
-  shallow FIFO, not a box limit → `HAPTIC_FIFO_CAP` 128 → **256**. `bench.py`
-  fixed to divide by the real interval + reset counters per step. RTT p50
-  **1.71 ms**, failsafe **~103 ms**, `dev.write` p50 87 µs — all solid. See
-  [BENCH.md](BENCH.md) §3.
-  **Still to do (scope — user has school access in the coming days)**: re-run
-  the sweep + overload with FIFO 256; the analog measurements (§2 of BENCH.md).
+  **Software bench DONE (2026-09-02, FIFO 256):** sweep 500–4000 Hz →
+  `Δcrc=Δgap=Δovr=0` at every rate, `backlog ≤ 31`, `Δunr` 2–54 (startup only)
+  → **box sustains ≥ 4 kHz clean; Phase 5 not needed.** Overload ~11 300
+  frames/s → box responsive, no corruption, monotonic → graceful degradation
+  confirmed. RTT p50 **1.71 ms**, failsafe **~105 ms**, `dev.write` p50 88 µs.
+  Full analysis in [BENCH.md](BENCH.md) §3.
+  **Last item — the scope session** (user has school access in the coming
+  days): the analog measurements, §2 of BENCH.md. Then 3.5 closes.
 
 - `[ ]` **3.6 MS OS 2.0 descriptors (Windows WinUSB auto-bind).** BOS + MS OS
   2.0 descriptor set (compatible-ID `WINUSB` + a DeviceInterfaceGUID) on

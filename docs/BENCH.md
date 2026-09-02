@@ -89,35 +89,36 @@ PA4→PA10 delay = pipeline latency, not buffer depth).
 
 ## 3. Conclusions
 
-### Confirmed (2026-09-02, software)
+### Confirmed (2026-09-02, software — `bench.py --all`, FIFO 256)
 
+- **Box sustains ≥ 4 kHz with zero wire loss.** Sample-rate sweep 500…4000 Hz:
+  `Δcrc_err = Δseq_gap = Δfifo_overrun = 0` at every rate; `tick_backlog_max`
+  ≤ 31 ticks (≤ 8 ms) — the main loop keeps up. `Δfifo_underrun` = 2…54
+  (startup transient only, was 89…796 with the 128-sample FIFO). → **the
+  1–2 kHz design target has large margin; Phase 5 (PWM path) is not needed.**
+- **Graceful degradation confirmed.** ~11 300 frames/s (≈ 90 k samples/s, ~45×
+  the sustainable rate) blasted unpaced for 4 s → box stays responsive,
+  `Δcrc_err = Δbad_type = 0`, `samples_played` monotonic. The excess is
+  dropped (overrun / seq-gap counters climb) exactly as "lossy but live"
+  intends.
 - **Pipeline latency ≈ 1.7 ms** — PING→PONG over the vendor pipe: min 1.65 /
-  p50 1.71 / p95 1.74 / max 1.83 ms (n=200). That is USB-out + one box
-  main-loop iteration + USB-in. Everything on top of it in the felt latency is
-  the **PC lookahead buffer** (40 ms by default) and the actuator's mechanical
-  rise — both known/tunable. → the lookahead can safely drop to ~5–10 ms if
+  p50 1.71 / p95 1.79 (n=200; one 6.7 ms Python-scheduling outlier). That is
+  USB-out + one box main-loop iteration + USB-in. Everything on top of it in
+  the *felt* latency is the **PC lookahead buffer** (40 ms default) and the
+  actuator's mechanical rise. → the lookahead can safely drop to ~5–10 ms if
   latency ever matters more than host-jitter tolerance.
-- **No wire loss up to 4 kHz** — sample-rate sweep 500…4000 Hz: `crc_err = 0`,
-  `seq_gap = 0`, `fifo_overrun = 0` at every rate; `tick_backlog_max` ≤ 31
-  ticks (≤ 8 ms) — the box main loop keeps up. The `fifo_underrun` seen at high
-  rates is **host-pacing jitter against a shallow FIFO**, not a box compute/IO
-  limit: fixed by `HAPTIC_FIFO_CAP` 128 → **256** (256 ms @ 1 kHz / 64 ms @
-  4 kHz) and a real telemetry source will pace tighter than Python + pyusb.
-  → **the 1–2 kHz design target has large margin; Phase 5 (PWM path) is not
-  needed.**
-- **Failsafe ≈ 103 ms** for a 100 ms `failsafe_ms` (99–106 ms over 5 runs) —
+- **Failsafe ≈ 105 ms** for a 100 ms `failsafe_ms` (100–108 ms over 5 runs) —
   matches spec (`failsafe_ms` + one loop iteration + poll granularity).
-- **PC `dev.write()` ≈ 87 µs** (p95 112) → the host can push ~11 k frames/s;
-  at 1 kHz / batch 8 that is 125 frames/s, i.e. ~1 % of the host USB budget.
+- **PC `dev.write()` ≈ 88 µs** (p95 113) → the host can push ~11 k frames/s;
+  at 1 kHz / batch 8 that is 125 frames/s, ~1 % of the host USB budget.
 
-### Still open (re-run after reflash + the scope session)
+Note: the sweep's `samples/s` reads ~97 % of the nominal rate — that is
+measurement-window slop (Δ`samples_played` over a PC-measured interval), not a
+real deficit: `Δfifo_overrun = 0` proves the box never lags the stream.
 
-- Sweep + overload with `HAPTIC_FIFO_CAP = 256` and the fixed `bench.py`
-  (measures real interval, per-step counter reset). Expect the high-rate
-  `fifo_underrun` to drop sharply.
-- Overload / graceful-degradation verdict (the run got truncated): does the box
-  stay responsive and drop cleanly under an ~11 k frames/s flood?
-- **Analog latency + jitter** — §2 table: render-tick period, rx→playout at
+### Still open — the scope session
+
+- **Analog latency + jitter** (§2 table): render-tick period, rx→playout at
   3 ms vs 40 ms lookahead, I2C write duration, DRV2605 + LRA mechanical rise,
   failsafe → silence.
 - For Phase 4 (RF): pick the RF-side FIFO depth from the measured host-jitter

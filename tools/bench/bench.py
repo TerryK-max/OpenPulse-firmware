@@ -170,7 +170,10 @@ Record scope screenshots + numbers here.
 # --------------------------------------------------------------------------- #
 def test_throughput(box, rates, dwell, batch, lookahead_ms):
     print("\n== throughput sweep ==")
-    rows = ["| rate Hz | frames/s | samples/s | Δunr | Δovr | Δcrc | Δgap | Δrsync | backlog | verdict |",
+    rows = ["_frames/s and samples/s are Δcounters / real interval — ±few % of "
+            "measurement slop. The verdict is what matters: `Δovr=Δcrc=Δgap=0` "
+            "means the box kept pace with no loss._", "",
+            "| rate Hz | frames/s | samples/s | Δunr | Δovr | Δcrc | Δgap | Δrsync | backlog | verdict |",
             "|--:|--:|--:|--:|--:|--:|--:|--:|--:|:--|"]
     box.start_reader()
     for rate in rates:
@@ -216,8 +219,10 @@ def test_throughput(box, rates, dwell, batch, lookahead_ms):
             verdict = "clean ✅"
         rows.append(f"| {rate} | {fr/elapsed:.0f} | {sp/elapsed:.0f} | {unr} | {ovr} | {crc} | "
                     f"{gap} | {rsy} | {bl} | {verdict} |")
-        print(f"  {rate:5d} Hz: {sp/elapsed:.0f} samp/s ({100*sp/elapsed/rate:.0f}%)  "
-              f"unr={unr} ovr={ovr} crc={crc} gap={gap} backlog={bl}")
+        # samples/s from Δplayed / real interval is ±few % (measurement-window
+        # slop); ovr=0 is the unambiguous "box kept pace" proof.
+        print(f"  {rate:5d} Hz: ~{sp/elapsed:.0f} samp/s  unr={unr} ovr={ovr} "
+              f"crc={crc} gap={gap} backlog={bl}  -> {verdict}")
         box.idle(); time.sleep(0.3)
     box.stop_reader()
     return rows
