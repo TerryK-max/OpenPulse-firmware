@@ -190,8 +190,14 @@ RAM 6.3 KB / 12). `make test` still 83/0.
   at request time, not when the ramp completes** — otherwise a PC priming right
   behind its `SET_MODE(SAMPLES)` had its samples discarded (FIFO stabilised
   low / underran on any run that caught the box in `IDLE`).
-  **Still to record in `docs/BENCH.md`**: sustained frames/s, scoped
-  end-to-end latency, 1 kHz vs 2 kHz, loss under deliberate overload.
+  **Tooling in place** (2026-09-02): `tools/bench/bench.py` (software:
+  throughput sweep, overload, failsafe latency, PING/PONG RTT, USB-write time →
+  `docs/BENCH-results.md`); `BENCH_GPIO_TRACE` build flag +
+  `src/bench/bench_trace.h` toggling PA4 (per frame) / PA10 (per render tick)
+  for the scope; `bench.py --latency-probe` drives a scope-friendly stream;
+  `docs/BENCH.md` has the full procedure + a results table to fill.
+  **To do (at the bench, needs a scope — user has school access in the coming
+  days)**: run `bench.py --all`; then the analog measurements (§2 of BENCH.md).
   Residual (cosmetic): `tick_backlog_max` ~16 at connect (one transient, FIFO
   absorbs it — lower it with `TRANSPORT_USB_TX_TRACE=0`); `seq_gap` ~2 once at
   handover.

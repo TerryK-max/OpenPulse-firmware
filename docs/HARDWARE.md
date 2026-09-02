@@ -31,8 +31,8 @@ on-hardware test.
 | **PA11** | DRV2605L **EN** (GPIO output, driven high by firmware) | `src/Main.c` `DRV2605_EN_PIN GPIO_Pin_11` — the code comment still says "PA4", the **pin number is correct, the comment is stale** |
 | PA2, PA3, PA5, PA6 | free | PA3/PA2 and PA5/PA6 are alternate I²C mappings if PA8/PA9 are ever needed for something else |
 | **PA7** | **free — reserved for the debug UART TX** (see [ARCHITECTURE.md](ARCHITECTURE.md) §"logging", [ROADMAP.md](ROADMAP.md) Phase 3) | UART TXD can remap to PA0/1/2/3/7/8/10/11; PA7 is the clean choice |
-| PA10 | free | second UART-TX-capable option |
-| PA4 | free | — |
+| PA10 | free — or `BENCH_GPIO_TRACE` **render-tick** marker (toggles per `drv2605_set_amplitude()`) | second UART-TX-capable option |
+| PA4 | free — or `BENCH_GPIO_TRACE` **frame-rx** marker (toggles per `DATA_SAMPLES`) | scope points for [BENCH.md](BENCH.md) §2 |
 
 - The **2-wire debug interface is on PA8/PA9** and is **disabled in firmware**
   (`R16_PIN_ALTERNATE &= ~RB_PIN_DEBUG_EN` in `main()`) so those pins can be I²C.

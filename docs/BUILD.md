@@ -154,6 +154,13 @@ waveform; `STATUS_REQ` at 10 Hz drives its dashboard. See
 [../tools/pc_sender/README.md](../tools/pc_sender/README.md). The CDC console
 keeps working alongside it.
 
+### Bench (Phase 3.5)
+
+`tools/bench/bench.py --all` runs the software measurements (throughput sweep,
+overload, failsafe, RTT, USB-write) → `docs/BENCH-results.md`. For the scope
+session, build with **`BENCH_GPIO_TRACE 1`** in `src/config.h` (claims PA4 +
+PA10 as markers) and follow [BENCH.md](BENCH.md) §2.
+
 ### Not yet (Phase 3.3 / 3.6)
 
 - A `TYPE_LOG`-frame `log` sink and a **PA7 UART** sink (`log_set_sink()`) — the

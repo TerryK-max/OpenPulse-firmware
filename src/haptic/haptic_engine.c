@@ -6,6 +6,7 @@
 #include "drv2605/drv2605_lra.h"
 #include "haptic/haptic_engine.h"
 #include "haptic/haptic_patterns.h"
+#include "bench/bench_trace.h"
 
 static haptic_fifo_t   s_fifo;
 static haptic_config_t s_cfg;
@@ -216,6 +217,7 @@ void haptic_tick(void)
         if (out < -lim) out = (int8_t)(-lim);
     }
 
+    bench_trace_drive();               /* scope marker: actuator command update */
     if (drv2605_set_amplitude(out) != I2C_OK) {
         if (s_stats.i2c_err < 0xFFFF) s_stats.i2c_err++;
     }

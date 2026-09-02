@@ -38,6 +38,7 @@
 #include "usb/usb_device.h"
 #include "usb/usb_vendor.h"
 #include "transport/transport_usb.h"
+#include "bench/bench_trace.h"
 
 /* ========================================================================
  *  DRV2605_BENCH_TOOLS = 1  --  Phase 0 bench bring-up
@@ -217,6 +218,7 @@ __HIGH_CODE
 int main(void)
 {
     board_init();
+    bench_trace_init();                   /* no-op unless BENCH_GPIO_TRACE */
     log_init();
     mDelaymS(300);                        /* let USB enumerate if a host is there */
 

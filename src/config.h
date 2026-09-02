@@ -185,4 +185,9 @@
  * PC dashboard is polling STATUS at ~10 Hz or it floods the log. */
 #define TRANSPORT_USB_TX_TRACE  1
 
+/* Phase 3.5 bench: toggle PA4 on each DATA frame and PA10 on each actuator
+ * update, for scope / logic-analyzer latency + jitter measurement. Claims PA4
+ * and PA10. See src/bench/bench_trace.h and docs/BENCH.md. 0 = compiled out. */
+#define BENCH_GPIO_TRACE  0
+
 #endif /* CONFIG_H */

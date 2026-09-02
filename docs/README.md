@@ -62,9 +62,11 @@ sending on EP2. The bench bring-up harness is still one
 | `src/util/crc.{c,h}` | CRC-8/SMBUS (poly 0x07). `proto_crc8()` alias. |
 | `src/usb/` | `usb_device.{c,h}` — composite CDC + vendor-bulk device (descriptors, enumeration, `USB_IRQHandler`, all EP dispatch); `usb_cdc.h` (log channel); `usb_vendor.h` (protocol channel, EP2). See [HARDWARE.md](HARDWARE.md) §5. |
 | `src/transport/` | `transport.h` (`transport_t` vtable); `transport_usb.{c,h}` (binds EP2 ↔ `link`). |
+| `src/bench/bench_trace.h` | Header-only GPIO markers (PA4/PA10) for scope latency/jitter measurement. Compiled out unless `BENCH_GPIO_TRACE`. See [BENCH.md](BENCH.md). |
 | `src/log/log.{c,h}` | Logging facade → `usb_cdc` (levels + macros; runtime sink switch = Phase 3.3, deferred). |
 | `tools/proto/`, `tools/test/` | Byte-identical `proto.h` copy for the PC; host unit harness for `src/link/` (`make test`). |
 | `tools/pc_sender/` | Python reference sender (`openpulse_send.py` + `proto.py`) — streams a waveform over the vendor pipe, prints the STATUS dashboard. |
+| `tools/bench/` | `bench.py` — Phase 3.5 measurement harness (throughput / overload / failsafe / RTT / USB-write, + `--latency-probe` for the scope). |
 | `Startup/`, `Ld/`, `RVMSIS/`, `StdPeriphDriver/` | WCH vendor SDK — **not in git** (their copyright). Fetch per [SETUP.md](SETUP.md). **Do not edit.** |
 | `EVT/` | WCH evaluation package + converted datasheets. **Not in git.** Fetch per [SETUP.md](SETUP.md). Reference only. |
 | `docs/vendor/` | Place third-party datasheets here for offline reference — `.gitignore`d ([vendor/README.md](vendor/README.md)). |

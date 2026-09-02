@@ -8,6 +8,7 @@
 #include "link/link.h"
 #include "link/proto.h"
 #include "usb/usb_vendor.h"
+#include "bench/bench_trace.h"
 
 #if TRANSPORT_USB_TX_TRACE
 #include "log/log.h"
@@ -52,10 +53,19 @@ static void usb_send_adapter(const uint8_t *frame, uint16_t len)
     (void)usb_vendor_send(frame, len);
 }
 
+/* inbound frame from the pipe -> link. The bench GPIO marker fires here, on
+ * DATA frames only, so PA4's edge rate == the frame rate. */
+static void tu_rx(const uint8_t *frame, uint16_t len)
+{
+    if (len >= 1 && frame[PROTO_OFF_TYPE] == TYPE_DATA_SAMPLES)
+        bench_trace_rx();
+    link_rx(frame, len);
+}
+
 static void tu_init(void)
 {
     link_init(usb_send_adapter);
-    usb_vendor_set_rx(link_rx);       /* signatures match: void(*)(const u8*, u16) */
+    usb_vendor_set_rx(tu_rx);
 }
 
 static void    tu_poll(void)        { usb_vendor_poll(); }
